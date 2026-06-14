@@ -5,23 +5,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once 'includes/db.php';
     $user = clean($_POST['username'] ?? '');
     $pass = $_POST['password'] ?? '';
-    $row  = DB::one("SELECT id, user_Id, password, first_Name, last_Name FROM admin_users WHERE user_Id = ? AND status = '1' LIMIT 1", [$user]);
-    if ($row && password_verify($pass, $row['password'])) {
+    // Real table uses pass_Word (MD5) and user_Id
+    $row = DB::one(
+        "SELECT id, user_Id, pass_Word, first_Name, last_Name FROM admin_users WHERE user_Id = ? AND user_Status = 1 LIMIT 1",
+        [$user]
+    );
+    if ($row && md5($pass) === $row['pass_Word']) {
         $_SESSION['admin_id']   = $row['id'];
         $_SESSION['admin_user'] = $row['user_Id'];
-        $_SESSION['admin_name'] = $row['first_Name'] . ' ' . $row['last_Name'];
+        $_SESSION['admin_name'] = trim($row['first_Name'] . ' ' . $row['last_Name']);
         header('Location: dashboard.php'); exit;
     } else {
-        // Legacy MD5 support during migration
-        $md5row = DB::one("SELECT id, user_Id, password, first_Name, last_Name FROM admin_users WHERE user_Id = ? AND password = ? AND status = '1' LIMIT 1", [$user, md5($pass)]);
-        if ($md5row) {
-            // Upgrade to bcrypt on the fly
-            DB::run("UPDATE admin_users SET password = ? WHERE id = ?", [password_hash($pass, PASSWORD_BCRYPT), $md5row['id']]);
-            $_SESSION['admin_id']   = $md5row['id'];
-            $_SESSION['admin_user'] = $md5row['user_Id'];
-            $_SESSION['admin_name'] = $md5row['first_Name'] . ' ' . $md5row['last_Name'];
-            header('Location: dashboard.php'); exit;
-        }
         $error = 'Invalid username or password.';
     }
 }
@@ -36,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',system-ui,sans-serif;background:#F0F2F7;min-height:100vh;display:flex;align-items:center;justify-content:center}
+body{font-family:'Inter',system-ui,sans-serif;background:#F3F4F6;min-height:100vh;display:flex;align-items:center;justify-content:center}
 .wrap{width:100%;max-width:400px;padding:24px}
 .card{background:#fff;border-radius:16px;padding:40px;box-shadow:0 2px 24px rgba(0,0,0,.08);border:1px solid #E5E7EB}
 .logo{text-align:center;margin-bottom:32px}
@@ -59,27 +53,24 @@ body{font-family:'Inter',system-ui,sans-serif;background:#F0F2F7;min-height:100v
     <div class="logo">
       <div class="logo-icon">🎓</div>
       <div class="logo-title">Hewitts of Croydon</div>
-      <div class="logo-sub">Admin Portal</div>
+      <div class="logo-sub">Admin Portal — Sign in</div>
     </div>
-
     <?php if ($error): ?>
     <div class="error"><?= htmlspecialchars($error) ?></div>
     <?php endif; ?>
-
-    <form method="POST" action="">
-      <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
+    <form method="POST">
       <div class="field">
-        <label for="username">Username</label>
-        <input type="text" id="username" name="username" placeholder="Enter your username" autofocus autocomplete="username">
+        <label>Username</label>
+        <input type="text" name="username" placeholder="Enter your username" autofocus autocomplete="username">
       </div>
       <div class="field">
-        <label for="password">Password</label>
-        <input type="password" id="password" name="password" placeholder="Enter your password" autocomplete="current-password">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="Enter your password" autocomplete="current-password">
       </div>
-      <button type="submit" class="btn">Sign in</button>
+      <button type="submit" class="btn">Sign in →</button>
     </form>
   </div>
-  <div class="footer">Hewitts of Croydon Admin &copy; <?= date('Y') ?></div>
+  <div class="footer">Hewitts of Croydon &copy; <?= date('Y') ?></div>
 </div>
 </body>
 </html>

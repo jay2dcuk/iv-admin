@@ -1,4 +1,27 @@
-<?php require_once 'includes/config.php'; require_auth(); ?>
+<?php
+require_once 'includes/config.php';
+require_auth();
+require_once 'includes/stats.php';
+
+// Format helpers
+function fmt_money(float $v): string { return '£' . number_format($v, 2); }
+function fmt_trend(int $pct): string {
+    return $pct >= 0
+        ? '<span class="stat-trend trend-up"><i class="ti ti-trending-up"></i> +' . $pct . '%</span>'
+        : '<span class="stat-trend trend-dn"><i class="ti ti-trending-down"></i> ' . $pct . '%</span>';
+}
+
+// Build chart data from real trend
+$chart_labels = []; $chart_vals = [];
+foreach ($trend as $t) {
+    $chart_labels[] = date('D', strtotime($t['day']));
+    $chart_vals[]   = round($t['total'], 2);
+}
+// Category totals for chart
+$cat_totals = []; $grand_total = 0;
+foreach ($by_category as $c) { $cat_totals[$c['cat_name']] = $c['total']; $grand_total += $c['total']; }
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -316,25 +339,25 @@ tbody tr:hover td{background:var(--blue-light)}
       <div class="stat">
         <div class="stat-top">
           <div class="stat-icon blue"><i class="ti ti-currency-pound"></i></div>
-          <span class="stat-trend trend-up"><i class="ti ti-trending-up"></i> +18%</span>
+          <?= fmt_trend($rev_change) ?>
         </div>
-        <div class="stat-val">£14,280</div>
+        <div class="stat-val"><?= fmt_money($revenue['total']) ?></div>
         <div class="stat-lbl">Revenue this week</div>
       </div>
       <div class="stat">
         <div class="stat-top">
           <div class="stat-icon green"><i class="ti ti-package"></i></div>
-          <span class="stat-trend trend-up"><i class="ti ti-trending-up"></i> +9%</span>
+          <span class="stat-trend trend-up"><i class="ti ti-package"></i></span>
         </div>
-        <div class="stat-val">247</div>
+        <div class="stat-val"><?= number_format($orders_week['total']) ?></div>
         <div class="stat-lbl">Orders this week</div>
       </div>
       <div class="stat">
         <div class="stat-top">
           <div class="stat-icon amber"><i class="ti ti-school"></i></div>
-          <span class="stat-trend trend-up"><i class="ti ti-trending-up"></i> +3</span>
+          <span class="stat-trend trend-up"><i class="ti ti-check"></i> active</span>
         </div>
-        <div class="stat-val">38</div>
+        <div class="stat-val"><?= number_format($schools['total']) ?></div>
         <div class="stat-lbl">Active schools</div>
       </div>
       <div class="stat">
@@ -342,8 +365,8 @@ tbody tr:hover td{background:var(--blue-light)}
           <div class="stat-icon red"><i class="ti ti-alert-circle"></i></div>
           <span class="stat-trend trend-dn"><i class="ti ti-alert-triangle"></i> urgent</span>
         </div>
-        <div class="stat-val">6</div>
-        <div class="stat-lbl">Low stock items</div>
+        <div class="stat-val"><?= number_format($ostock['total']) ?></div>
+        <div class="stat-lbl">Out of stock items</div>
       </div>
     </div>
 
@@ -530,30 +553,41 @@ function buildChart(p){
 function setTab(btn,p){document.querySelectorAll('.ctab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');buildChart(p);}
 buildChart('week');
 
-// Orders table
-const orders=[
-  {id:'HW-8821',school:"St. Mary's Primary",cat:'Uniform',items:5,total:'£142.50',status:'paid',date:'13 Jun'},
-  {id:'HW-8820',school:'Croydon High',cat:'Sports',items:2,total:'£58.00',status:'shipped',date:'13 Jun'},
-  {id:'HW-8819',school:"St. Anne's Academy",cat:'Uniform',items:8,total:'£231.00',status:'pending',date:'12 Jun'},
-  {id:'HW-8818',school:'Whitgift School',cat:'Workwear',items:1,total:'£24.99',status:'paid',date:'12 Jun'},
-  {id:'HW-8817',school:'Trinity School',cat:'Scouts & Guides',items:3,total:'£89.00',status:'cancelled',date:'11 Jun'},
-  {id:'HW-8816',school:"St. Joseph's",cat:'Uniform',items:6,total:'£175.00',status:'shipped',date:'11 Jun'},
-  {id:'HW-8815',school:'Archbishop Tenison',cat:'Uniform',items:4,total:'£112.00',status:'paid',date:'10 Jun'},
-  {id:'HW-8814',school:'Riddlesdown College',cat:'Sports',items:7,total:'£203.50',status:'pending',date:'10 Jun'},
-];
+// Real orders from DB
+const orders=<?php
+$js_orders = array_map(function($o) {
+    $status = 'pending';
+    if ($o['oStatus'] === 'D') $status = 'shipped';
+    elseif ($o['pg_Status'] === '0' && $o['pg_Authcode'] !== '') $status = 'paid';
+    elseif ($o['oStatus'] === 'C') $status = 'cancelled';
+    return [
+        'id'     => htmlspecialchars($o['order_Id']),
+        'name'   => htmlspecialchars(trim($o['fName'] . ' ' . $o['lName'])),
+        'cat'    => htmlspecialchars($o['categories'] ?? 'Uniform'),
+        'items'  => (int)$o['item_count'],
+        'total'  => '£' . number_format($o['pg_Amount'], 2),
+        'status' => $status,
+        'date'   => date('d M', strtotime($o['dt'])),
+    ];
+}, $recent_orders);
+echo json_encode($js_orders);
+?>;
+
 function renderOrders(data){
-  document.getElementById('tbody').innerHTML=data.map(o=>`
+  const tbody=document.getElementById('tbody');
+  if(!data.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">No orders found</td></tr>';return;}
+  tbody.innerHTML=data.map(o=>`
     <tr>
-      <td><span class="order-id">#${o.id}</span></td>
-      <td>${o.school}</td>
+      <td><span class="order-id">${o.id}</span></td>
+      <td>${o.name}</td>
       <td>${o.cat}</td>
       <td>${o.items}</td>
       <td><strong>${o.total}</strong></td>
       <td><span class="badge badge-${o.status}">${o.status.charAt(0).toUpperCase()+o.status.slice(1)}</span></td>
       <td style="color:var(--muted)">${o.date}</td>
       <td style="display:flex;gap:6px">
-        <button class="tbl-btn" onclick="window.location='sales-Details-Form.php?id=${o.id}'">View</button>
-        <button class="tbl-btn">Print</button>
+        <button class="tbl-btn" onclick="window.location='sales-Details-Form.php?id='+encodeURIComponent('${o.id}')">View</button>
+        <button class="tbl-btn" onclick="window.location='sales-Details-Form-Print.php?id='+encodeURIComponent('${o.id}')">Print</button>
       </td>
     </tr>`).join('');
 }
@@ -561,7 +595,7 @@ renderOrders(orders);
 
 document.getElementById('srch').addEventListener('input',function(){
   const q=this.value.toLowerCase();
-  renderOrders(q?orders.filter(o=>o.id.toLowerCase().includes(q)||o.school.toLowerCase().includes(q)||o.status.includes(q)||o.cat.toLowerCase().includes(q)):orders);
+  renderOrders(q?orders.filter(o=>o.id.toLowerCase().includes(q)||o.name.toLowerCase().includes(q)||o.status.includes(q)||o.cat.toLowerCase().includes(q)):orders);
 });
 
 // Chat

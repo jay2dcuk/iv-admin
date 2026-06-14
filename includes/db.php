@@ -18,32 +18,33 @@ class DB {
             );
         } catch (PDOException $e) {
             error_log('DB Error: ' . $e->getMessage());
-            die(json_encode(['error' => 'Database connection failed']));
+            return null;
         }
         return self::$pdo;
     }
 
     public static function query(string $sql, array $p = []): array {
-        $s = self::connect()->prepare($sql);
-        $s->execute($p);
-        return $s->fetchAll();
+        try {
+            $s = self::connect()->prepare($sql); $s->execute($p); return $s->fetchAll();
+        } catch (Exception $e) { error_log($e->getMessage()); return []; }
     }
 
     public static function one(string $sql, array $p = []): ?array {
-        $s = self::connect()->prepare($sql);
-        $s->execute($p);
-        return $s->fetch() ?: null;
+        try {
+            $s = self::connect()->prepare($sql); $s->execute($p); return $s->fetch() ?: null;
+        } catch (Exception $e) { error_log($e->getMessage()); return null; }
     }
 
     public static function run(string $sql, array $p = []): int {
-        $s = self::connect()->prepare($sql);
-        $s->execute($p);
-        return $s->rowCount();
+        try {
+            $s = self::connect()->prepare($sql); $s->execute($p); return $s->rowCount();
+        } catch (Exception $e) { error_log($e->getMessage()); return 0; }
     }
 
     public static function insert(string $sql, array $p = []): int {
-        $s = self::connect()->prepare($sql);
-        $s->execute($p);
-        return (int) self::connect()->lastInsertId();
+        try {
+            $s = self::connect()->prepare($sql); $s->execute($p);
+            return (int) self::connect()->lastInsertId();
+        } catch (Exception $e) { error_log($e->getMessage()); return 0; }
     }
 }
