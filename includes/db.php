@@ -7,9 +7,14 @@ class DB {
     public static function connect(): PDO {
         if (self::$pdo) return self::$pdo;
         try {
+            $host = defined('DB_HOST') && DB_HOST ? DB_HOST : 'mysql.iv.digital';
+            $name = defined('DB_NAME') && DB_NAME ? DB_NAME : 'ivhew_demo';
+            $user = defined('DB_USER') && DB_USER ? DB_USER : 'ivhew_user';
+            $pass = defined('DB_PASS') ? DB_PASS : 'ivhew_demo';
+
             self::$pdo = new PDO(
-                'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4',
-                DB_USER, DB_PASS,
+                "mysql:host={$host};dbname={$name};charset=utf8mb4",
+                $user, $pass,
                 [
                     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -18,7 +23,7 @@ class DB {
             );
         } catch (PDOException $e) {
             error_log('DB Error: ' . $e->getMessage());
-            return null;
+            throw new RuntimeException('Database connection failed: ' . $e->getMessage());
         }
         return self::$pdo;
     }
