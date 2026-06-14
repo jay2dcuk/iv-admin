@@ -1,6 +1,20 @@
 <?php
 require_once __DIR__ . '/db.php';
 
+// Safe defaults
+$revenue      = ['total' => 0];
+$orders_week  = ['total' => 0];
+$last_week    = ['total' => 0];
+$schools      = ['total' => 0];
+$pending      = ['total' => 0];
+$ostock       = ['total' => 0];
+$recent_orders = [];
+$by_category  = [];
+$trend        = [];
+$rev_change   = 0;
+
+try {
+
 // Revenue this week (paid orders: pg_Status='0' and pg_Authcode != '')
 $revenue = DB::one("
     SELECT COALESCE(SUM(pg_Amount), 0) as total
@@ -99,6 +113,10 @@ $trend = DB::query("
 
 // Revenue change %
 $rev_change = 0;
-if ($last_week['total'] > 0) {
+if (!empty($last_week['total']) && $last_week['total'] > 0) {
     $rev_change = round((($revenue['total'] - $last_week['total']) / $last_week['total']) * 100);
+}
+
+} catch (Exception $e) {
+    error_log('Stats error: ' . $e->getMessage());
 }

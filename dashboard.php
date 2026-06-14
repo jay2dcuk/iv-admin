@@ -1,7 +1,13 @@
 <?php
 require_once 'includes/config.php';
 require_auth();
-require_once 'includes/stats.php';
+
+// Safe error handling
+try {
+    require_once 'includes/stats.php';
+} catch (Exception $e) {
+    error_log('Dashboard error: ' . $e->getMessage());
+}
 
 // Format helpers
 function fmt_money(float $v): string { return '£' . number_format($v, 2); }
